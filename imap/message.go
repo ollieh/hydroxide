@@ -384,19 +384,42 @@ func createMessage(c *protonmail.Client, u *protonmail.User, privateKeys openpgp
 	ccList, _ := mr.Header.AddressList("Cc")
 	bccList, _ := mr.Header.AddressList("Bcc")
 
-	if len(fromList) != 1 {
-		return nil, errors.New("the From field must contain exactly one address")
-	}
-	if len(toList) == 0 && len(ccList) == 0 && len(bccList) == 0 {
-		return nil, errors.New("no recipient specified")
+	var fromAddrStr string
+	var fromName string
+	if len(fromList) == 1 {
+		fromAddrStr = fromList[0].Address
+		fromName = fromList[0].Name
 	}
 
-	fromAddrStr := fromList[0].Address
 	var fromAddr *protonmail.Address
-	for _, addr := range addrs {
-		if strings.EqualFold(addr.Email, fromAddrStr) {
-			fromAddr = addr
-			break
+	if fromAddrStr != "" {
+		for _, addr := range addrs {
+			if strings.EqualFold(addr.Email, fromAddrStr) {
+				fromAddr = addr
+				break
+			}
+		}
+	}
+	if fromAddr == nil {
+		for _, candidate := range fromList {
+			for _, addr := range addrs {
+				if strings.EqualFold(addr.Email, candidate.Address) {
+					fromAddr = addr
+					if fromName == "" {
+						fromName = candidate.Name
+					}
+					break
+				}
+			}
+			if fromAddr != nil {
+				break
+			}
+		}
+	}
+	if fromAddr == nil && len(addrs) > 0 {
+		fromAddr = addrs[0]
+		if fromName == "" {
+			fromName = fromAddr.DisplayName
 		}
 	}
 	if fromAddr == nil {
@@ -423,7 +446,17 @@ func createMessage(c *protonmail.Client, u *protonmail.User, privateKeys openpgp
 		return nil, errors.New("sender address key hasn't been decrypted")
 	}
 
+	fromHeader := &mail.Address{
+		Address: fromAddr.Email,
+		Name:    fromName,
+	}
+	mr.Header.SetAddressList("From", []*mail.Address{fromHeader})
+
 	msg := &protonmail.Message{
+		Sender: &protonmail.MessageAddress{
+			Address: fromAddr.Email,
+			Name:    fromName,
+		},
 		ToList:    protonmailAddressList(toList),
 		CCList:    protonmailAddressList(ccList),
 		BCCList:   protonmailAddressList(bccList),

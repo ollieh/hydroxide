@@ -225,12 +225,23 @@ func (mbox *mailbox) fetchMessage(isUid bool, id uint32, items []imap.FetchItem)
 		switch item {
 		case imap.FetchEnvelope:
 			fetched.Envelope = fetchEnvelope(msg)
-		case imap.FetchBody, imap.FetchBodyStructure:
+		case imap.FetchBody:
 			bs, err := mbox.fetchBodyStructure(msg, item == imap.FetchBodyStructure)
 			if err != nil {
 				return nil, err
 			}
 			fetched.BodyStructure = bs
+		case imap.FetchBodyStructure:
+			fetched.BodyStructure = &imap.BodyStructure{
+				MIMEType:    "text",
+				MIMESubType: "plain",
+				Params: map[string]string{
+					"charset": "utf-8",
+				},
+				Encoding: "8bit",
+				Size:     uint32(msg.Size),
+				Lines:    1,
+			}
 		case imap.FetchFlags:
 			fetched.Flags = mbox.fetchFlags(msg)
 		case imap.FetchInternalDate:
